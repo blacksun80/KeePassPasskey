@@ -388,6 +388,7 @@ public sealed class PluginAuthenticator : IPluginAuthenticator
 	/// Pings KeePass to confirm it is reachable with an open database before the user is prompted
 	/// for verification, so both MakeCredential and GetAssertion fail fast (with a notification
 	/// already shown) instead of verifying first and only then discovering KeePass cannot proceed.
+	/// A locked database is offered for unlocking first.
 	/// Returns S_OK when ready, otherwise the appropriate failure HRESULT.
 	/// </summary>
 	/// <param name="operation">Operation name used in the failure notification.</param>
@@ -408,6 +409,9 @@ public sealed class PluginAuthenticator : IPluginAuthenticator
 			return HResults.E_FAIL;
 		}
 
+		if (ping.Status == PingStatus.NoDatabase && TryUnlockDatabase())
+			return HResults.S_OK;
+
 		if (ping.Status != PingStatus.Ready)
 		{
 			Log.Warn($"KeePass not ready status={ping.Status}");
@@ -416,6 +420,19 @@ public sealed class PluginAuthenticator : IPluginAuthenticator
 		}
 
 		return HResults.S_OK;
+	}
+
+	/// <summary>
+	/// Asks KeePass to show its unlock prompt and waits until the user closes it. False when the
+	/// database stays locked, including with an older plugin that does not know the request.
+	/// </summary>
+	private bool TryUnlockDatabase()
+	{
+		Log.Info("database locked, asking KeePass to unlock");
+		var response = _pipeClient.UnlockDatabase();
+		bool unlocked = response != null && response.ErrorCode == null && response.Unlocked;
+		Log.Info($"unlocked={unlocked} error={response?.ErrorCode}");
+		return unlocked;
 	}
 
 	/// <summary>

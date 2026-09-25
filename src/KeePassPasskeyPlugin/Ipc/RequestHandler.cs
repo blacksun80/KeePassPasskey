@@ -4,7 +4,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Windows.Forms;
+using KeePass;
+using KeePass.Forms;
 using KeePass.Plugins;
+using KeePass.UI;
 using KeePassPasskey.Passkey;
 using KeePassPasskey.Storage;
 using KeePassPasskey.Update;
@@ -58,6 +62,7 @@ internal sealed class RequestHandler
 				GetAssertionRequest r => HandleGetAssertion(r),
 				GetSettingsRequest r => HandleGetSettings(r),
 				SaveSettingsRequest r => HandleSaveSettings(r),
+				UnlockDatabaseRequest r => HandleUnlockDatabase(r),
 				_ => new PipeResponseBase { ErrorCode = PipeErrorCode.InternalError, ErrorMessage = "Unknown request type: " + req.Type }
 			};
 			return JsonConvert.SerializeObject(response);
@@ -294,6 +299,46 @@ internal sealed class RequestHandler
 		_settingsStorage.Save(req.Settings);
 		Log.Configure(Log.LogFilePath, req.Settings.LogLevel);
 		return new SaveSettingsResponse();
+	}
+
+	private UnlockDatabaseResponse HandleUnlockDatabase(UnlockDatabaseRequest req)
+	{
+		if (!IsDatabaseOpen())
+		{
+			var mw = _host.MainWindow;
+			if (mw.InvokeRequired)
+				mw.Invoke(new MethodInvoker(() => PromptUnlock(mw)));
+			else
+				PromptUnlock(mw);
+		}
+		return new UnlockDatabaseResponse { Unlocked = IsDatabaseOpen() };
+	}
+
+	/// <summary>
+	/// Runs KeePass's own unlock path, the one its remote unlock message takes: bring the main window
+	/// forward, then show the key prompt for the active locked document. Returns once the prompt closes.
+	/// </summary>
+	private static void PromptUnlock(MainForm mw)
+	{
+		// A dialog is already open, possibly the key prompt itself; a second one on top would only confuse.
+		if (mw.UIIsInteractionBlocked() || GlobalWindowManager.WindowCount > 0)
+		{
+			Log.Info("KeePass is busy with a dialog, not prompting to unlock");
+			return;
+		}
+
+		var locked = mw.DocumentManager.Documents.FirstOrDefault(mw.IsFileLocked);
+		if (locked == null)
+		{
+			Log.Info("no locked database to unlock");
+			return;
+		}
+
+		if (mw.DocumentManager.ActiveDocument != locked)
+			mw.MakeDocumentActive(locked);
+
+		Log.Info("prompting to unlock the database");
+		mw.ProcessAppMessage((IntPtr)Program.AppMessage.Unlock, IntPtr.Zero);
 	}
 
 	private bool IsDatabaseOpen()

@@ -23,6 +23,7 @@ public static class PipeMessageTypes
 	public const string GetAssertion = "get_assertion";
 	public const string GetSettings = "get_settings";
 	public const string SaveSettings = "save_settings";
+	public const string UnlockDatabase = "unlock_database";
 }
 
 [JsonConverter(typeof(PipeRequestConverter))]
@@ -130,6 +131,13 @@ public sealed class SaveSettingsRequest : PipeRequestBase
 
 	[JsonProperty("settings")]
 	public KeePassPasskeySettings Settings { get; set; }
+}
+
+// Asks KeePass to show its unlock prompt for a locked database. The response comes once the prompt
+// is closed. A plugin predating this request answers with an error, which the caller treats as locked.
+public sealed class UnlockDatabaseRequest : PipeRequestBase
+{
+	public override string Type => PipeMessageTypes.UnlockDatabase;
 }
 
 [JsonConverter(typeof(StringEnumConverter), typeof(SnakeCaseNamingStrategy))]
@@ -259,6 +267,14 @@ public sealed class SaveSettingsResponse : PipeResponseBase
 	public SaveSettingsResponse() { Type = PipeMessageTypes.SaveSettings; }
 }
 
+public sealed class UnlockDatabaseResponse : PipeResponseBase
+{
+	public UnlockDatabaseResponse() { Type = PipeMessageTypes.UnlockDatabase; }
+
+	[JsonProperty("unlocked")]
+	public bool Unlocked { get; set; }
+}
+
 public sealed class CredentialInfo
 {
 	[JsonProperty("credentialId")]
@@ -352,6 +368,7 @@ internal sealed class PipeRequestConverter : JsonConverter
 			PipeMessageTypes.GetAssertion => new GetAssertionRequest(),
 			PipeMessageTypes.GetSettings => new GetSettingsRequest(),
 			PipeMessageTypes.SaveSettings => new SaveSettingsRequest(),
+			PipeMessageTypes.UnlockDatabase => new UnlockDatabaseRequest(),
 			_ => throw new JsonSerializationException($"Unknown request type: {type}")
 		};
 		serializer.Populate(jobj.CreateReader(), result);
