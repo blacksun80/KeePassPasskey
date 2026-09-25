@@ -97,7 +97,7 @@ public sealed class PluginAuthenticator : IPluginAuthenticator
 					rpNameStr = new string(pDecoded->pRpInformation->pwszName);
 
 				// 3b. Check KeePass reachability before prompting for verification.
-				int hrReady = CheckKeePassReady("Passkey creation");
+				int hrReady = CheckKeePassReady("Passkey creation", out bool unlockedNow);
 				if (hrReady < HResults.S_OK) return hrReady;
 
 				// 3c. Fetch the open databases for the registration prompt's database picker.
@@ -127,7 +127,7 @@ public sealed class PluginAuthenticator : IPluginAuthenticator
 				var (hrUv, targetDatabase, targetEntry) = UserVerifierDispatcher.VerifyForRegistration(
 					new RegistrationVerification((nint)pRequest, pRequest->transactionId, rpIdUtf8,
 						userNameStr, databases, candidates, enterpriseAttestation),
-					cts.Token);
+					unlockedNow, cts.Token);
 				Log.Info($"UserVerification hr=0x{hrUv:X8} selectedDb={targetDatabase?.Id ?? "(none)"} targetEntry={targetEntry?.EntryUuid ?? "(none)"}");
 				if (hrUv < 0) return hrUv;
 
@@ -242,7 +242,7 @@ public sealed class PluginAuthenticator : IPluginAuthenticator
 				var allowList = ExtractCredentialIds(pDecoded->CredentialList);
 
 				// 3b. Check KeePass reachability before prompting for verification.
-				int hrReady = CheckKeePassReady("Sign-in");
+				int hrReady = CheckKeePassReady("Sign-in", out bool unlockedNow);
 				if (hrReady < HResults.S_OK) return hrReady;
 
 				// 4. User verification
@@ -254,7 +254,7 @@ public sealed class PluginAuthenticator : IPluginAuthenticator
 					new SignInVerification((nint)pRequest, pRequest->transactionId, rpIdUtf8, uvUsername,
 						// Null only when there is no entry, so a titleless one stays tellable from none.
 						entry == null ? null : entry.Title ?? "", entry?.DatabaseName, entry?.Icon),
-					cts.Token);
+					unlockedNow, cts.Token);
 				Log.Info($"UserVerification hr=0x{hrUv:X8}");
 				if (hrUv < 0) return hrUv;
 
@@ -388,12 +388,14 @@ public sealed class PluginAuthenticator : IPluginAuthenticator
 	/// Pings KeePass to confirm it is reachable with an open database before the user is prompted
 	/// for verification, so both MakeCredential and GetAssertion fail fast (with a notification
 	/// already shown) instead of verifying first and only then discovering KeePass cannot proceed.
-	/// A locked database is offered for unlocking first.
+	/// A locked database is offered for unlocking first; <paramref name="unlockedNow"/> tells whether
+	/// that happened, since the user has then just verified themselves to KeePass.
 	/// Returns S_OK when ready, otherwise the appropriate failure HRESULT.
 	/// </summary>
 	/// <param name="operation">Operation name used in the failure notification.</param>
-	private int CheckKeePassReady(string operation)
+	private int CheckKeePassReady(string operation, out bool unlockedNow)
 	{
+		unlockedNow = false;
 		var ping = _pipeClient.Ping();
 		if (ping == null)
 		{
@@ -410,7 +412,10 @@ public sealed class PluginAuthenticator : IPluginAuthenticator
 		}
 
 		if (ping.Status == PingStatus.NoDatabase && TryUnlockDatabase())
+		{
+			unlockedNow = true;
 			return HResults.S_OK;
+		}
 
 		if (ping.Status != PingStatus.Ready)
 		{
