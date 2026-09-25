@@ -11,6 +11,7 @@ using KeePass.Plugins;
 using KeePass.UI;
 using KeePassPasskey.Passkey;
 using KeePassPasskey.Storage;
+using KeePassPasskey.UI;
 using KeePassPasskey.Update;
 using KeePassPasskeyShared;
 using KeePassPasskeyShared.Ipc;
@@ -315,8 +316,8 @@ internal sealed class RequestHandler
 	}
 
 	/// <summary>
-	/// Runs KeePass's own unlock path, the one its remote unlock message takes: bring the main window
-	/// forward, then show the key prompt for the active locked document. Returns once the prompt closes.
+	/// Brings KeePass to the front, then runs its own unlock path, the one its remote unlock message
+	/// takes: show the key prompt for the active locked document. Returns once the prompt closes.
 	/// </summary>
 	private static void PromptUnlock(MainForm mw)
 	{
@@ -338,7 +339,9 @@ internal sealed class RequestHandler
 			mw.MakeDocumentActive(locked);
 
 		Log.Info("prompting to unlock the database");
+		var previous = KeePassForeground.BringToFront(mw);
 		mw.ProcessAppMessage((IntPtr)Program.AppMessage.Unlock, IntPtr.Zero);
+		KeePassForeground.Restore(previous);
 	}
 
 	private bool IsDatabaseOpen()
