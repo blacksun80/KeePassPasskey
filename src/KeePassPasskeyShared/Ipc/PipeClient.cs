@@ -92,8 +92,9 @@ public sealed class PipeClient
 	}
 
 	/// <summary>
-	/// The per-user name, or the legacy name when only an older plugin is listening. Resolved per
-	/// request, since KeePass (and with it the plugin) may start or be updated after this client.
+	/// The per-user name, or the legacy name when this user's plugin holds it (it claims it first) or is
+	/// older. Resolved per request, since KeePass (and with it the plugin) may start or be updated after
+	/// this client.
 	/// </summary>
 	private static string ResolvePipeName()
 	{
