@@ -17,6 +17,16 @@ public class UnlockDatabaseProtocolTests
 	}
 
 	[Fact]
+	public void Busy_RoundTrips()
+	{
+		var json = JsonConvert.SerializeObject(new UnlockDatabaseResponse { Busy = true });
+		var response = JsonConvert.DeserializeObject<UnlockDatabaseResponse>(json);
+		Assert.NotNull(response);
+		Assert.True(response.Busy);
+		Assert.False(response.Unlocked);
+	}
+
+	[Fact]
 	public void ErrorFromOlderPlugin_ReadsAsNotUnlocked()
 	{
 		// What a plugin that does not know the request answers.
@@ -24,6 +34,7 @@ public class UnlockDatabaseProtocolTests
 		var response = JsonConvert.DeserializeObject<UnlockDatabaseResponse>(json);
 		Assert.NotNull(response);
 		Assert.False(response.Unlocked);
+		Assert.False(response.Busy);
 		Assert.Equal(PipeErrorCode.InternalError, response.ErrorCode);
 	}
 }

@@ -32,12 +32,14 @@ internal static class UserVerifierDispatcher
 
 	/// <summary>
 	/// Unlocking KeePass for this very request already verified the user, often with Windows Hello
-	/// itself, so a second Windows Hello prompt right after it is dropped. The confirmation prompt
-	/// stays: it names the site and, on registration, picks the target database.
+	/// itself, so a second Windows Hello prompt right after it is dropped. Only while the confirmation
+	/// prompt stays on: it names the site and, on registration, picks the target database. Without it,
+	/// Windows Hello is the only step that shows which site asked, so it is kept.
 	/// </summary>
 	private static UserVerificationMode EffectiveMode(UserVerificationMode mode, bool unlockedNow)
 	{
-		if (!unlockedNow || !mode.HasFlag(UserVerificationMode.WindowsHello)) return mode;
+		if (!unlockedNow || !mode.HasFlag(UserVerificationMode.WindowsHello)
+			|| !mode.HasFlag(UserVerificationMode.Notification)) return mode;
 		Log.Info("database was just unlocked, skipping Windows Hello");
 		return mode & ~UserVerificationMode.WindowsHello;
 	}

@@ -134,7 +134,8 @@ public sealed class SaveSettingsRequest : PipeRequestBase
 }
 
 // Asks KeePass to show its unlock prompt for a locked database. The response comes once the prompt
-// is closed. A plugin predating this request answers with an error, which the caller treats as locked.
+// is closed, or right away with Busy set while KeePass shows another dialog. A plugin predating this
+// request answers with an error, which the caller treats as locked.
 public sealed class UnlockDatabaseRequest : PipeRequestBase
 {
 	public override string Type => PipeMessageTypes.UnlockDatabase;
@@ -273,6 +274,13 @@ public sealed class UnlockDatabaseResponse : PipeResponseBase
 
 	[JsonProperty("unlocked")]
 	public bool Unlocked { get; set; }
+
+	/// <summary>
+	/// KeePass shows a dialog, possibly its own key prompt opened by the user, so no prompt was opened.
+	/// Ask again once it may have closed.
+	/// </summary>
+	[JsonProperty("busy")]
+	public bool Busy { get; set; }
 }
 
 public sealed class CredentialInfo

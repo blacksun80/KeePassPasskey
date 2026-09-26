@@ -304,35 +304,38 @@ internal sealed class RequestHandler
 
 	private UnlockDatabaseResponse HandleUnlockDatabase(UnlockDatabaseRequest req)
 	{
+		bool busy = false;
 		if (!IsDatabaseOpen())
 		{
 			var mw = _host.MainWindow;
 			if (mw.InvokeRequired)
-				mw.Invoke(new MethodInvoker(() => PromptUnlock(mw)));
+				mw.Invoke(new MethodInvoker(() => busy = !TryPromptUnlock(mw)));
 			else
-				PromptUnlock(mw);
+				busy = !TryPromptUnlock(mw);
 		}
-		return new UnlockDatabaseResponse { Unlocked = IsDatabaseOpen() };
+		bool unlocked = IsDatabaseOpen();
+		return new UnlockDatabaseResponse { Unlocked = unlocked, Busy = busy && !unlocked };
 	}
 
 	/// <summary>
 	/// Brings KeePass to the front, then runs its own unlock path, the one its remote unlock message
 	/// takes: show the key prompt for the active locked document. Returns once the prompt closes.
+	/// False when KeePass shows a dialog, so the caller can ask again once it has closed.
 	/// </summary>
-	private static void PromptUnlock(MainForm mw)
+	private static bool TryPromptUnlock(MainForm mw)
 	{
 		// A dialog is already open, possibly the key prompt itself; a second one on top would only confuse.
 		if (mw.UIIsInteractionBlocked() || GlobalWindowManager.WindowCount > 0)
 		{
-			Log.Info("KeePass is busy with a dialog, not prompting to unlock");
-			return;
+			Log.Debug("KeePass is busy with a dialog, not prompting to unlock");
+			return false;
 		}
 
 		var locked = mw.DocumentManager.Documents.FirstOrDefault(mw.IsFileLocked);
 		if (locked == null)
 		{
 			Log.Info("no locked database to unlock");
-			return;
+			return true;
 		}
 
 		if (mw.DocumentManager.ActiveDocument != locked)
@@ -342,6 +345,7 @@ internal sealed class RequestHandler
 		var previous = KeePassForeground.BringToFront(mw);
 		mw.ProcessAppMessage((IntPtr)Program.AppMessage.Unlock, IntPtr.Zero);
 		KeePassForeground.Restore(previous);
+		return true;
 	}
 
 	private bool IsDatabaseOpen()
